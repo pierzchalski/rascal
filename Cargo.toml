@@ -1,0 +1,15 @@
+[package]
+name = "rascal"
+version = "0.1.0"
+authors = ["eap"]
+
+[dependencies]
+opencl = { git = "https://github.com/pierzchalski/rust-opencl.git" }
+bitflags = "0.3.2"
+
+[lib]
+name = "rascal"
+
+[[example]]
+name = "platform"
+path = "examples/platform/main.rs"
