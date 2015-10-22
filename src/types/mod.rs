@@ -1,18 +1,24 @@
 use opencl::cl;
+use num;
 
 pub type Result<A> = ::std::result::Result<A, cl::CLStatus>;
-fn check_status(status: cl::cl_int) -> Result<()> {
-    unimplemented!()
+fn check_status(status_int: cl::cl_int) -> Result<()> {
+    let status = num::FromPrimitive::from_i32(status_int);
+    match status {
+        Some(cl::CLStatus::CL_SUCCESS) => Ok(()),
+        Some(other) => Err(other),
+        None => panic!("Tried to check invalid opencl status! (value was {})", status_int)
+    }
 }
 
 #[allow(dead_code)]
 pub mod ll {
     use opencl::cl;
     use opencl::error::check;
+    use libc;
     use std::ptr;
     use std::mem;
     use std::iter::repeat;
-    use std::borrow::Borrow;
     use super::check_status;
     use super::Result;
 
@@ -36,6 +42,16 @@ pub mod ll {
     pub struct Event(cl::cl_event);
     #[derive(Debug, Copy, Clone)]
     pub struct Sampler(cl::cl_sampler);
+
+    unsafe fn string_from_cstring_buf(mut buf: Vec<u8>) -> String {
+        let last_char = buf.pop();
+        match last_char {
+            Some(0u8) => String::from_utf8_unchecked(buf),
+            Some(other) => panic!(
+                "Last char in buffer wasn't null! (expected 0, found {})", other),
+            None => panic!("Tried to turn empty buffer into string! (expected null character)"),
+        }
+    }
 
     pub mod mem_flags {
         use opencl::cl;
@@ -105,7 +121,8 @@ pub mod ll {
             unsafe {
                 let mut ret = 0;
                 let res = cl::ll::clGetDeviceInfo(
-                    device.0, self as cl::cl_device_info, mem::size_of::<cl::cl_bool>() as u64,
+                    device.0, self as cl::cl_device_info,
+                    mem::size_of::<cl::cl_bool>() as libc::size_t,
                     &mut ret as *mut _ as *mut _, ptr::null_mut());
                 try!(check_status(res));
                 Ok(ret)
@@ -134,10 +151,10 @@ pub mod ll {
                 check(res, "Failed to get length of string result");
                 let mut bytes: Vec<_> = repeat(0).take(str_len as usize).collect();
                 let res = cl::ll::clGetDeviceInfo(
-                    device.0, self as cl::cl_device_info, bytes.len() as u64,
+                    device.0, self as cl::cl_device_info, bytes.len() as libc::size_t,
                     bytes.as_mut_ptr() as *mut _ as *mut _, ptr::null_mut());
                 try!(check_status(res));
-                Ok(String::from_utf8_unchecked(bytes))
+                Ok(string_from_cstring_buf(bytes))
             }
         }
     }
@@ -169,7 +186,8 @@ pub mod ll {
             unsafe {
                 let mut ret = 0;
                 let res = cl::ll::clGetDeviceInfo(
-                    device.0, self as cl::cl_device_info, mem::size_of::<cl::cl_uint>() as u64,
+                    device.0, self as cl::cl_device_info,
+                    mem::size_of::<cl::cl_uint>() as libc::size_t,
                     &mut ret as *mut _ as *mut _, ptr::null_mut());
                 try!(check_status(res));
                 Ok(ret)
@@ -185,7 +203,8 @@ pub mod ll {
             unsafe {
                 let mut device_type: cl::cl_device_type = 0;
                 let res = cl::ll::clGetDeviceInfo(
-                    device.0, cl::CL_DEVICE_TYPE, mem::size_of::<cl::cl_device_type>() as u64,
+                    device.0, cl::CL_DEVICE_TYPE,
+                    mem::size_of::<cl::cl_device_type>() as libc::size_t,
                     &mut device_type as *mut _ as *mut _, ptr::null_mut());
                 try!(check_status(res));
                 Ok(DeviceType::from_bits_truncate(device_type))
@@ -200,7 +219,7 @@ pub mod ll {
             check(res, "Failed to get number of platforms");
             let mut ids: Vec<_> = repeat(0 as *mut _).take(num_platforms as usize).collect();
             let res = cl::ll::clGetPlatformIDs(
-                ids.len() as u32, ids.as_mut_ptr(), ptr::null_mut());
+                ids.len() as cl::cl_uint, ids.as_mut_ptr(), ptr::null_mut());
             try!(check_status(res));
             Ok(ids.iter().map(|ptr| PlatformId(*ptr)).collect())
         }
@@ -214,10 +233,10 @@ pub mod ll {
             check(res, "Failed to get platform info length");
             let mut bytes: Vec<_> = repeat(0).take(info_size as usize).collect();
             let res = cl::ll::clGetPlatformInfo(
-                platform.0, info as cl::cl_platform_info, bytes.len() as u64,
+                platform.0, info as cl::cl_platform_info, bytes.len() as libc::size_t,
                 bytes.as_mut_ptr() as *mut _, ptr::null_mut());
             try!(check_status(res));
-            Ok(String::from_utf8_unchecked(bytes))
+            Ok(string_from_cstring_buf(bytes))
         }
     }
 
@@ -231,7 +250,7 @@ pub mod ll {
             check(res, "Failed to get number of platforms");
             let mut ids: Vec<_> = repeat(0 as *mut _).take(num_devices as usize).collect();
             let res = cl::ll::clGetDeviceIDs(
-                platform.0, device_type.bits(), ids.len() as u32, ids.as_mut_ptr(),
+                platform.0, device_type.bits(), ids.len() as cl::cl_uint, ids.as_mut_ptr(),
                 ptr::null_mut());
             try!(check_status(res));
             Ok(ids.iter().map(|ptr| DeviceId(*ptr)).collect())
@@ -251,7 +270,6 @@ pub mod ll {
 
 pub mod hl {
     use super::ll;
-    use super::Result;
 
     pub struct Platform(ll::PlatformId);
     pub struct Device(ll::DeviceId);

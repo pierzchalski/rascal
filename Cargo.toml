@@ -6,6 +6,8 @@ authors = ["eap"]
 [dependencies]
 opencl = { git = "https://github.com/pierzchalski/rust-opencl.git" }
 bitflags = "0.3.2"
+num = "0.1.27"
+libc = "0.1.8"
 
 [lib]
 name = "rascal"
