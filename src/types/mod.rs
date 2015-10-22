@@ -24,24 +24,53 @@ pub mod ll {
 
     pub use self::device_type::DeviceType;
 
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct PlatformId(cl::cl_platform_id);
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct DeviceId(cl::cl_device_id);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Context(cl::cl_context);
-    #[derive(Debug, Copy, Clone)]
-    pub struct CommandQueue(cl::cl_command_queue);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Mem(cl::cl_mem);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Program(cl::cl_program);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Kernel(cl::cl_kernel);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Event(cl::cl_event);
-    #[derive(Debug, Copy, Clone)]
-    pub struct Sampler(cl::cl_sampler);
+    macro_rules! newtype_to_from_raw {
+        ($($(#[$Meta:meta])* pub struct $Name:ident($Type:ty));*;) => {
+            $(
+                $(#[$Meta])*
+                pub struct $Name($Type);
+
+                impl $Name {
+                    unsafe fn from_raw(raw: $Type) -> Self {
+                        $Name(raw)
+                    }
+
+                    fn as_raw(&self) -> $Type {
+                        self.0
+                    }
+                }
+            )*
+        }
+    }
+
+    newtype_to_from_raw! {
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct PlatformId(cl::cl_platform_id);
+
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct DeviceId(cl::cl_device_id);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Context(cl::cl_context);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct CommandQueue(cl::cl_command_queue);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Mem(cl::cl_mem);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Program(cl::cl_program);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Kernel(cl::cl_kernel);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Event(cl::cl_event);
+
+        #[derive(Debug, Copy, Clone)]
+        pub struct Sampler(cl::cl_sampler);
+    }
 
     /// Turns a vector of `u8`s into a Rust string.
     /// Assumes that the vector had a string `s` written to it, with `strlen(s) == buf.len() - 1`
@@ -217,7 +246,10 @@ pub mod ll {
                     mem::size_of::<cl::cl_device_type>() as libc::size_t,
                     &mut device_type as *mut _ as *mut _, ptr::null_mut());
                 try!(check_status(res));
-                Ok(DeviceType::from_bits_truncate(device_type))
+                match DeviceType::from_bits(device_type) {
+                    Some(device_type) => Ok(device_type),
+                    None => panic!("Rascal: Got invalid device type {}!", device_type),
+                }
             }
         }
     }
@@ -271,7 +303,7 @@ pub mod ll {
         info.get_device_info(device)
     }
 
-    pub fn create_context(platform: PlatformId, devices: &[DeviceId]) -> Context {
+    pub fn create_context(platform: PlatformId, devices: &[DeviceId]) -> Result<Context> {
         let mut err = 0;
         //let ctx = cl::ll::clCreateContext()
         unimplemented!()
