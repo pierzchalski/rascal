@@ -34,7 +34,7 @@ fn main() {
                 println!("   Name: {}", device.name());
                 println!("   Type: {:?}", device.device_type());
                 println!("   Profile: {}", device.profile());
-                //println!("   Compute Units: {}", device.compute_units());
+                println!("   Compute Units: {}", device.num_compute_units());
             }
         }
     }

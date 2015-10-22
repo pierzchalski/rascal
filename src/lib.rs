@@ -4,7 +4,3 @@ extern crate opencl;
 
 pub mod types;
 pub use types::ll;
-
-#[test]
-fn it_works() {
-}
