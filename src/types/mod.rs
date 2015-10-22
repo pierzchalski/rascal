@@ -43,13 +43,23 @@ pub mod ll {
     #[derive(Debug, Copy, Clone)]
     pub struct Sampler(cl::cl_sampler);
 
-    unsafe fn string_from_cstring_buf(mut buf: Vec<u8>) -> String {
+    /// Turns a vector of `u8`s into a Rust string.
+    /// Assumes that the vector had a string `s` written to it, with `strlen(s) == buf.len() - 1`
+    /// (i.e. the last entry in the vector should be the terminating null character).
+    fn string_from_cstring_buf(mut buf: Vec<u8>) -> String {
         let last_char = buf.pop();
         match last_char {
-            Some(0u8) => String::from_utf8_unchecked(buf),
+            Some(0u8) => {
+                match String::from_utf8(buf) {
+                    Ok(string) => string,
+                    Err(err) => panic!(
+                        "Rascal: Invalid utf8 sequence in buffer! (Error: {:?})", err),
+                }
+            }
             Some(other) => panic!(
-                "Last char in buffer wasn't null! (expected 0, found {})", other),
-            None => panic!("Tried to turn empty buffer into string! (expected null character)"),
+                "Rascal: Last char in buffer wasn't null! (Expected 0, found {})", other),
+            None => panic!(
+                "Rascal: Tried to turn empty buffer into string! (Expected null character)"),
         }
     }
 
