@@ -15,3 +15,7 @@ name = "rascal"
 [[example]]
 name = "platform"
 path = "examples/platform/main.rs"
+
+[[example]]
+name = "demo"
+path = "examples/demo/main.rs"

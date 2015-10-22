@@ -14,8 +14,8 @@ fn check_status(status_int: cl::cl_int) -> Result<()> {
 #[allow(dead_code)]
 pub mod ll {
     use opencl::cl;
-    use opencl::error::check;
     use libc;
+    use std::ffi::CStr;
     use std::ptr;
     use std::mem;
     use std::iter::repeat;
@@ -187,7 +187,7 @@ pub mod ll {
                 let mut str_len = 0;
                 let res = cl::ll::clGetDeviceInfo(
                     device.0, self as cl::cl_device_info, 0, ptr::null_mut(), &mut str_len);
-                check(res, "Failed to get length of string result");
+                try!(check_status(res));
                 let mut bytes: Vec<_> = repeat(0).take(str_len as usize).collect();
                 let res = cl::ll::clGetDeviceInfo(
                     device.0, self as cl::cl_device_info, bytes.len() as libc::size_t,
@@ -258,7 +258,7 @@ pub mod ll {
         unsafe {
             let mut num_platforms = 0;
             let res = cl::ll::clGetPlatformIDs(0, ptr::null_mut(), &mut num_platforms);
-            check(res, "Failed to get number of platforms");
+            try!(check_status(res));
             let mut ids: Vec<_> = repeat(0 as *mut _).take(num_platforms as usize).collect();
             let res = cl::ll::clGetPlatformIDs(
                 ids.len() as cl::cl_uint, ids.as_mut_ptr(), ptr::null_mut());
@@ -272,7 +272,7 @@ pub mod ll {
             let mut info_size = 0;
             let res = cl::ll::clGetPlatformInfo(
                 platform.0, info as cl::cl_platform_info, 0, ptr::null_mut(), &mut info_size);
-            check(res, "Failed to get platform info length");
+            try!(check_status(res));
             let mut bytes: Vec<_> = repeat(0).take(info_size as usize).collect();
             let res = cl::ll::clGetPlatformInfo(
                 platform.0, info as cl::cl_platform_info, bytes.len() as libc::size_t,
@@ -289,7 +289,7 @@ pub mod ll {
             let mut num_devices = 0;
             let res = cl::ll::clGetDeviceIDs(
                 platform.0, device_type.bits(), 0, ptr::null_mut(), &mut num_devices);
-            check(res, "Failed to get number of platforms");
+            try!(check_status(res));
             let mut ids: Vec<_> = repeat(0 as *mut _).take(num_devices as usize).collect();
             let res = cl::ll::clGetDeviceIDs(
                 platform.0, device_type.bits(), ids.len() as cl::cl_uint, ids.as_mut_ptr(),
@@ -303,18 +303,53 @@ pub mod ll {
         info.get_device_info(device)
     }
 
+    extern "C" fn dummy_handler(errinfo: *const libc::c_char, private_info: *const libc::c_void,
+        cb: libc::size_t, user_data: *mut libc::c_void)
+    {
+        unsafe {
+            let _ = private_info;
+            let _ = cb;
+            let _ = user_data;
+            let errinfo = CStr::from_ptr(errinfo).to_str();
+            match errinfo {
+                Ok(errinfo) => panic!("Rascal: Got error from context! (Error: {})", errinfo),
+                Err(err) => panic!(
+                    "Rascal: Got error from context! (Error string is invalid: {:?})", err),
+            }
+        }
+    }
+
     pub fn create_context(platform: PlatformId, devices: &[DeviceId]) -> Result<Context> {
-        let mut err = 0;
-        //let ctx = cl::ll::clCreateContext()
-        unimplemented!()
+        unsafe {
+            let mut err = 0;
+            // disgusting and cheaty.
+            let props = [
+                cl::CL_CONTEXT_PLATFORM as usize as cl::cl_context_properties,
+                platform.0 as usize as cl::cl_context_properties,
+                0 as cl::cl_context_properties];
+            let ids: Vec<_> = devices.iter().map(|d| d.0).collect();
+            let context = cl::ll::clCreateContext(
+                props.as_ptr(), ids.len() as cl::cl_uint, ids[..].as_ptr(),
+                dummy_handler, ptr::null_mut(),
+                &mut err as *mut _);
+            try!(check_status(err));
+            Ok(Context(context))
+        }
     }
 }
 
 pub mod hl {
     use super::ll;
+    use super::Result;
 
+    #[derive(Debug, Copy, Clone)]
     pub struct Platform(ll::PlatformId);
+
+    #[derive(Debug, Copy, Clone)]
     pub struct Device(ll::DeviceId);
+
+    #[derive(Debug)]
+    pub struct Context(ll::Context);
 
     pub fn get_platforms() -> Vec<Platform> {
         ll::get_platform_ids().unwrap().into_iter().map(Platform).collect()
@@ -324,6 +359,11 @@ pub mod hl {
         pub fn get_devices(&self) -> Vec<Device> {
             ll::get_device_ids(self.0, ll::device_type::ALL).unwrap()
                 .into_iter().map(Device).collect()
+        }
+
+        pub fn create_context(&self, devices: &[Device]) -> Result<Context> {
+            let devices: Vec<_> = devices.iter().map(|d| d.0).collect();
+            ll::create_context(self.0, &devices[..]).map(Context)
         }
 
         pub fn name(&self) -> String {
