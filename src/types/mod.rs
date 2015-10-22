@@ -242,9 +242,7 @@ pub mod ll {
         info.get_device_info(device)
     }
 
-    pub fn create_context<D: Borrow<[DeviceId]>>(platform: PlatformId, evices: D)
-        -> Context
-    {
+    pub fn create_context(platform: PlatformId, devices: &[DeviceId]) -> Context {
         let mut err = 0;
         //let ctx = cl::ll::clCreateContext()
         unimplemented!()
