@@ -4,5 +4,7 @@ extern crate opencl;
 extern crate num;
 extern crate libc;
 
-pub mod types;
-pub use types::ll;
+pub mod ll;
+pub mod hl;
+
+pub type Result<A> = ::std::result::Result<A, opencl::cl::CLStatus>;

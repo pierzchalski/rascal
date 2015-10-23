@@ -23,7 +23,7 @@ fn main() {
     println!("");
     {
         println!("Using rascal...");
-        for platform in rascal::types::hl::get_platforms().iter() {
+        for platform in rascal::hl::get_platforms().iter() {
             println!("Platform: {}", platform.name());
             println!("Platform Version: {}", platform.version());
             println!("Vendor:   {}", platform.vendor());
